@@ -8,10 +8,11 @@ import (
 	"math"
 	"net"
 	"server/master"
-	pb "server/proto"
 	"sort"
 	"sync"
 	"time"
+
+	pb "github.com/gmarseglia/SDCC-Common/proto"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

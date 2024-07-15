@@ -7,9 +7,10 @@ import (
 	"log"
 	"math"
 	"net"
-	pb "server/proto"
 	"sync"
 	"time"
+
+	pb "github.com/gmarseglia/SDCC-Common/proto"
 
 	"google.golang.org/grpc"
 )

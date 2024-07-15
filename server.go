@@ -7,10 +7,11 @@ import (
 	"os/signal"
 	"server/front"
 	"server/master"
-	"server/utils"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/gmarseglia/SDCC-Common/utils"
 )
 
 // define flags
