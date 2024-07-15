@@ -104,13 +104,11 @@ func (s *MasterServer) NotifyPing(ctx context.Context, in *pb.PingRequest) (*pb.
 
 func RemoveWorker(targetWorkerAddr string, cause string) {
 	// Check if worker exists
-	WorkerInfoMapLock.RLock()
+	WorkerInfoMapLock.Lock()
 	_, exists := WorkerInfoMap[targetWorkerAddr]
-	WorkerInfoMapLock.RUnlock()
 
 	// delete worker address
 	if exists {
-		WorkerInfoMapLock.Lock()
 		delete(WorkerInfoMap, targetWorkerAddr)
 		workerChannel <- len(WorkerInfoMap)
 		log.Printf("[Master]: Deleted %s due to %s", targetWorkerAddr, cause)

@@ -293,7 +293,6 @@ func (s *FrontServer) ConvolutionalLayer(ctx context.Context, in *pb.Convolution
 					s, ok := status.FromError(err)
 					if ok && s.Code() == codes.ResourceExhausted {
 						log.Printf("[Front]: Response: %d.%d: Resource exhausted error occurred: %s by %s.", id, i, s.Message(), addr)
-						setReady(&workersMapsLock, workersMap, i, false)
 						wg.Done()
 						fatalChannel <- err
 						return
@@ -301,12 +300,17 @@ func (s *FrontServer) ConvolutionalLayer(ctx context.Context, in *pb.Convolution
 						log.Printf("[Front]: Cancelled %d.%d (%v) to %s", id, i, indexesMap[i], addr)
 						wg.Done()
 						return
-					} else {
+					} else if ok && s.Code() == codes.Unavailable {
 						log.Printf("[Front]: %s is unreachable: %v", addr, err)
 						master.RemoveWorker(addr, "unreachable")
 						setReady(&workersMapsLock, workersMap, i, false)
 						replaceChan <- i
 						continue
+					} else {
+						log.Printf("[Front]: Response: %d.%d: unkwown error occurred: %s by %s.", id, i, s.Message(), addr)
+						wg.Done()
+						fatalChannel <- err
+						return
 					}
 				}
 
