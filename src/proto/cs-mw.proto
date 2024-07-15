@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+option go_package = "mini/proto";
+
+package mini;
+
+message CancelRequest {
+    int32 ID = 1;
+    int32 InnerID = 2;
+}
+
+message CancelReply {
+    string Result = 1;
+}
+
+message Matrix {
+    repeated Row Rows = 1;
+}
+
+message Row {
+    repeated float Values = 1;
+}
+
+message ConvolutionalLayerFrontRequest {
+    Matrix Target = 1;
+    repeated Matrix Kernel = 2;
+    int32 AvgPoolSize = 3;
+    bool UseKernels = 4;
+    bool UseSigmoid = 5;
+}
+
+message ConvolutionalLayerFrontReply {
+    repeated Matrix Result = 1;
+    int32 ID = 2;
+}
+
+message ConvolutionalLayerBackRequest {
+    Matrix Target = 1;
+    repeated Matrix Kernel = 2;
+    int32 AvgPoolSize = 3;
+    bool UseKernels = 5;
+    bool UseSigmoid = 6;
+    int32 ID = 7;
+    int32 InnerID = 8;
+}
+
+message ConvolutionalLayerBackReply {
+    repeated Matrix Result = 1;
+    int32 ID = 2;
+    int32 InnerID = 3;
+}
+
+// Define an enum
+enum PingType {
+    ACTIVATE = 0;  // Default value
+    PING = 1;
+    DEACTIVATE = 2;
+}
+
+message PingRequest {
+    string WorkerAddress = 1;
+    int32 QueueSize = 2;
+    float UsageCPU = 3;
+    PingType Type = 4;
+}
+
+message PingReply {
+    string Result = 1;
+}
+
+service Front {
+    rpc ConvolutionalLayer(ConvolutionalLayerFrontRequest) returns (ConvolutionalLayerFrontReply) {}
+}
+
+service Back {
+    rpc Cancel(CancelRequest) returns (CancelReply) {}
+    rpc ConvolutionalLayer(ConvolutionalLayerBackRequest) returns (ConvolutionalLayerBackReply) {}
+}
+
+service Master {
+    rpc NotifyPing(PingRequest) returns (PingReply) {}
+}
