@@ -22,6 +22,7 @@ var (
 	workerChannel     = make(chan int, 1000)
 	s                 *grpc.Server
 	PingTimeout       = time.Second * 30
+	done              = false
 )
 
 type MasterServer struct {
@@ -211,13 +212,14 @@ func GetWorkers(number int, avoidList []WorkerInfo) []WorkerInfo {
 
 func monitorWorker() {
 	go func() {
-		for workers := range workerChannel {
+		for !done {
+			workers := <-workerChannel
 			log.Printf("[Master]: Active workers: %d", workers)
 		}
 	}()
 
 	go func() {
-		for {
+		for !done {
 			time.Sleep(PingTimeout)
 			WorkerInfoMapLock.RLock()
 			for workerAddr, info := range WorkerInfoMap {
