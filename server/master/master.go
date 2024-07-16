@@ -104,11 +104,13 @@ func (s *MasterServer) NotifyPing(ctx context.Context, in *pb.PingRequest) (*pb.
 
 func RemoveWorker(targetWorkerAddr string, cause string) {
 	// Check if worker exists
-	WorkerInfoMapLock.Lock()
+	WorkerInfoMapLock.RLock()
 	_, exists := WorkerInfoMap[targetWorkerAddr]
+	WorkerInfoMapLock.RUnlock()
 
 	// delete worker address
 	if exists {
+		WorkerInfoMapLock.Lock()
 		delete(WorkerInfoMap, targetWorkerAddr)
 		workerChannel <- len(WorkerInfoMap)
 		log.Printf("[Master]: Deleted %s due to %s", targetWorkerAddr, cause)
@@ -152,9 +154,8 @@ func GetWorkers(number int, avoidList []WorkerInfo) []WorkerInfo {
 			Cost:          float32(math.Inf(1))}
 	}
 
-	// Find the cheapest worker
-	WorkerInfoMapLock.Lock()
-
+	// Find the cheapest workers
+	WorkerInfoMapLock.RLock()
 	found := 0
 	skipAvoidList := false
 	for found < number {
@@ -181,7 +182,9 @@ func GetWorkers(number int, avoidList []WorkerInfo) []WorkerInfo {
 		}
 		found += stepFound
 	}
+	WorkerInfoMapLock.RUnlock()
 
+	WorkerInfoMapLock.Lock()
 	// Increase the cost to avoid overuse on burst traffic
 	log.Printf("[Master]: Chosen %d workers:", number)
 	for i := 0; i < number; i++ {
@@ -191,7 +194,6 @@ func GetWorkers(number int, avoidList []WorkerInfo) []WorkerInfo {
 		WorkerInfoMap[cheapestWorkerInfo[i].WorkerAddress] = winfo
 		cheapestWorkerInfo[i] = winfo
 	}
-
 	WorkerInfoMapLock.Unlock()
 
 	return cheapestWorkerInfo

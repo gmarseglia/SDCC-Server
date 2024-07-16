@@ -187,7 +187,7 @@ func (s *FrontServer) ConvolutionalLayer(ctx context.Context, in *pb.Convolution
 				for i := 0; i < actualParallelWorkers; i++ {
 					if !completedBlocks[i] {
 						allCompleted = false
-						break
+						i = actualParallelWorkers // break inner for
 					}
 				}
 				completeBlocksLock.RUnlock()
@@ -211,10 +211,11 @@ func (s *FrontServer) ConvolutionalLayer(ctx context.Context, in *pb.Convolution
 				writeWorkersMap(&workersMapsLock, workersMap, replaceIndex, aw)
 				log.Printf("[Front]: Replaced %d.%d with %s", id, replaceIndex, newWorker[0].WorkerAddress)
 				readyChan[replaceIndex] <- true
+
 			case err := <-fatalChannel:
 				// Cancel pending requests
-				cancelAllActiveWorkers(&workersMapsLock, workersMap, id)
 				finalChan <- err
+				cancelAllActiveWorkers(&workersMapsLock, workersMap, id)
 				log.Printf("[Front]: Tearing down %d due to fatal failure", id)
 				wg.Wait()
 				log.Printf("[Front]: Teared down %d", id)
