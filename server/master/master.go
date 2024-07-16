@@ -142,11 +142,6 @@ func GetWorkers(number int, avoidList []WorkerInfo) []WorkerInfo {
 		log.Printf("[Master]: Avoiding %s", avoidList[avoid].WorkerAddress)
 	}
 
-	// Wait for workers to be added
-	for len(WorkerInfoMap) < 1 {
-		time.Sleep(time.Second * 1)
-	}
-
 	var cheapestWorkerInfo = make([]WorkerInfo, number)
 	for i := 0; i < number; i++ {
 		cheapestWorkerInfo[i] = WorkerInfo{
@@ -155,11 +150,12 @@ func GetWorkers(number int, avoidList []WorkerInfo) []WorkerInfo {
 	}
 
 	// Find the cheapest workers
-	WorkerInfoMapLock.RLock()
 	found := 0
 	skipAvoidList := false
 	for found < number {
 		stepFound := 0
+		WorkerInfoMapLock.RLock()
+		availableWorkers := len(WorkerInfoMap)
 		for _, info := range WorkerInfoMap {
 			log.Printf("[Master]: Worker %s cost: %.2f, skipAvoidList: %t, checkIn: %t", info.WorkerAddress, info.Cost, skipAvoidList, checkIn(info, avoidList))
 			for i := found; i < number; i++ {
@@ -176,13 +172,17 @@ func GetWorkers(number int, avoidList []WorkerInfo) []WorkerInfo {
 				}
 			}
 		}
+		WorkerInfoMapLock.RUnlock()
 		if stepFound == 0 {
 			log.Printf("[Master]: No more workers found")
 			skipAvoidList = true
 		}
 		found += stepFound
+		if availableWorkers == 0 {
+			// Wait for workers to be added
+			time.Sleep(time.Second * 1)
+		}
 	}
-	WorkerInfoMapLock.RUnlock()
 
 	WorkerInfoMapLock.Lock()
 	// Increase the cost to avoid overuse on burst traffic
