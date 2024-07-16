@@ -86,13 +86,17 @@ func (s *MasterServer) NotifyPing(ctx context.Context, in *pb.PingRequest) (*pb.
 
 	case pb.PingType_PING:
 		// Update worker info
-		WorkerInfoMapLock.Lock()
+		WorkerInfoMapLock.RLock()
 		winfo := WorkerInfoMap[in.GetWorkerAddress()]
+		WorkerInfoMapLock.RUnlock()
+
 		winfo.WorkerAddress = in.GetWorkerAddress()
 		winfo.QueueSize = in.GetQueueSize()
 		winfo.UsageCPU = in.GetUsageCPU()
 		winfo.Cost = getCPUMetric(in.GetUsageCPU()) * (float32(in.GetQueueSize()) + 1)
 		winfo.LastPing = time.Now()
+
+		WorkerInfoMapLock.Lock()
 		WorkerInfoMap[in.GetWorkerAddress()] = winfo
 		WorkerInfoMapLock.Unlock()
 		return &pb.PingReply{Result: "PING OK"}, nil
