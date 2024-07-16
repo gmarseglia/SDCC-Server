@@ -13,6 +13,7 @@ import (
 	"time"
 
 	pb "github.com/gmarseglia/SDCC-Common/proto"
+	"github.com/gmarseglia/SDCC-Common/utils"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -333,8 +334,10 @@ func (s *FrontServer) ConvolutionalLayer(ctx context.Context, in *pb.Convolution
 					} else {
 						end = begin + kernelBlockSize
 					}
+					offset := j * kernelBlockSize
+					log.Printf("[DEBUG]: Writing %d to %d, for block %d, offset: %d", begin, end, completedBlockIndex, offset)
 					for k := begin; k < end; k++ {
-						completedResult[k] = WorkerResponse.GetResult()[k-begin]
+						completedResult[k] = WorkerResponse.GetResult()[k-begin+offset]
 					}
 				}
 				completeBlocksLock.Unlock()
@@ -350,6 +353,13 @@ func (s *FrontServer) ConvolutionalLayer(ctx context.Context, in *pb.Convolution
 	outcoume := <-finalChan
 	if outcoume == nil {
 		log.Printf("[Front]: Response: %d complete in %d ms", id, time.Since(startTime).Milliseconds())
+
+		// #TODO: remove if working
+		for i, protoResult := range completedResult {
+			result := utils.ProtoToMatrix(protoResult)
+			utils.PrettyPrint(fmt.Sprintf("Result: %d", i), result)
+		}
+
 		return &pb.ConvolutionalLayerFrontReply{ID: id, Result: completedResult}, nil
 	} else {
 		log.Printf("[Front]: Response: %d failed in %d ms", id, time.Since(startTime).Milliseconds())
