@@ -214,6 +214,15 @@ func (s *FrontServer) ConvolutionalLayer(ctx context.Context, in *pb.Convolution
 				log.Printf("[Front]: Replaced %d.%d with %s", id, replaceIndex, newWorker[0].WorkerAddress)
 				readyChan[replaceIndex] <- true
 
+			case <-ctx.Done():
+				// Cancel pending requests
+				finalChan <- ctx.Err()
+				cancelAllActiveWorkers(&workersMapsLock, workersMap, id)
+				log.Printf("[Front]: Tearing down %d due to client failure", id)
+				wg.Wait()
+				log.Printf("[Front]: Teared down %d", id)
+				return
+
 			case err := <-fatalChannel:
 				// Cancel pending requests
 				finalChan <- err
@@ -221,7 +230,6 @@ func (s *FrontServer) ConvolutionalLayer(ctx context.Context, in *pb.Convolution
 				log.Printf("[Front]: Tearing down %d due to fatal failure", id)
 				wg.Wait()
 				log.Printf("[Front]: Teared down %d", id)
-				return
 			}
 		}
 	}()
