@@ -180,6 +180,7 @@ func GetWorkers(number int, avoidList []WorkerInfo) []WorkerInfo {
 		found += stepFound
 		if availableWorkers == 0 {
 			// Wait for workers to be added
+			log.Printf("[Master]: No available workers found")
 			time.Sleep(time.Second * 1)
 		}
 	}
