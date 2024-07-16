@@ -27,6 +27,7 @@ var (
 	counter          int32
 	counterLock      sync.Mutex
 	s                *grpc.Server
+	RequestTimeout   = time.Minute * 5
 )
 
 // FrontServer is used to implement the MiniServer interface
@@ -75,14 +76,15 @@ func setReady(workersMapsLock *sync.RWMutex, workersMap map[int]ActiveWorker, i 
 
 func readWorkersMap(workersMapsLock *sync.RWMutex, workersMap map[int]ActiveWorker, i int) ActiveWorker {
 	workersMapsLock.RLock()
-	defer workersMapsLock.RUnlock()
-	return workersMap[i]
+	aw := workersMap[i]
+	workersMapsLock.RUnlock()
+	return aw
 }
 
 func writeWorkersMap(workersMapsLock *sync.RWMutex, workersMap map[int]ActiveWorker, i int, entry ActiveWorker) {
 	workersMapsLock.Lock()
-	defer workersMapsLock.Unlock()
 	workersMap[i] = entry
+	workersMapsLock.Unlock()
 }
 
 func (s *FrontServer) ConvolutionalLayer(ctx context.Context, in *pb.ConvolutionalLayerFrontRequest) (*pb.ConvolutionalLayerFrontReply, error) {
@@ -272,7 +274,7 @@ func (s *FrontServer) ConvolutionalLayer(ctx context.Context, in *pb.Convolution
 				writeWorkersMap(&workersMapsLock, workersMap, i, aw)
 
 				// create the context
-				ctxInternal, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+				ctxInternal, cancel := context.WithTimeout(context.Background(), RequestTimeout)
 				defer cancel()
 
 				// Set workers as active

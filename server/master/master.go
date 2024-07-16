@@ -21,6 +21,7 @@ var (
 	WorkerInfoMapLock sync.RWMutex
 	workerChannel     = make(chan int, 1000)
 	s                 *grpc.Server
+	PingTimeout       = time.Second * 30
 )
 
 type MasterServer struct {
@@ -36,6 +37,7 @@ type WorkerInfo struct {
 }
 
 func getCPUMetric(gotCPU float32) float32 {
+	// If we got CPU usage, return that
 	if gotCPU > 0 {
 		return gotCPU
 	}
@@ -43,26 +45,30 @@ func getCPUMetric(gotCPU float32) float32 {
 	// Get avg CPU usage
 	var sum float32 = 0
 	found := 0
+	WorkerInfoMapLock.RLock()
 	for _, info := range WorkerInfoMap {
 		if info.UsageCPU > 0 {
 			sum += info.UsageCPU
 			found++
 		}
 	}
+	WorkerInfoMapLock.RUnlock()
 	if found == 0 {
 		return 1
+	} else {
+		return sum / float32(found)
 	}
-	return sum / float32(found)
 }
 
 // NotifyPing implementation
 func (s *MasterServer) NotifyPing(ctx context.Context, in *pb.PingRequest) (*pb.PingReply, error) {
-
 	switch in.Type {
 	case pb.PingType_ACTIVATE:
-		log.Printf("[Master]: Notification from %s of type %s", in.GetWorkerAddress(), in.GetType())
 		// Add worker
+		log.Printf("[Master]: Notification from %s of type %s", in.GetWorkerAddress(), in.GetType())
+		WorkerInfoMapLock.RLock()
 		_, exists := WorkerInfoMap[in.GetWorkerAddress()]
+		WorkerInfoMapLock.RUnlock()
 		if exists {
 			return &pb.PingReply{Result: "ALREADY ADDED"}, nil
 		} else {
@@ -80,19 +86,19 @@ func (s *MasterServer) NotifyPing(ctx context.Context, in *pb.PingRequest) (*pb.
 
 	case pb.PingType_PING:
 		// Update worker info
-		cost := getCPUMetric(in.GetUsageCPU()) * (float32(in.QueueSize) + 1)
 		WorkerInfoMapLock.Lock()
 		winfo := WorkerInfoMap[in.GetWorkerAddress()]
 		winfo.WorkerAddress = in.GetWorkerAddress()
 		winfo.QueueSize = in.GetQueueSize()
 		winfo.UsageCPU = in.GetUsageCPU()
-		winfo.Cost = cost
+		winfo.Cost = getCPUMetric(in.GetUsageCPU()) * (float32(in.GetQueueSize()) + 1)
 		winfo.LastPing = time.Now()
 		WorkerInfoMap[in.GetWorkerAddress()] = winfo
 		WorkerInfoMapLock.Unlock()
 		return &pb.PingReply{Result: "PING OK"}, nil
 
 	case pb.PingType_DEACTIVATE:
+		// Remove worker
 		log.Printf("[Master]: Notification from %s of type %s", in.GetWorkerAddress(), in.GetType())
 		RemoveWorker(in.GetWorkerAddress(), "terminate")
 		return &pb.PingReply{Result: "PING OK"}, nil
@@ -138,10 +144,8 @@ func checkIn(target WorkerInfo, avoidList []WorkerInfo) bool {
 
 func GetWorkers(number int, avoidList []WorkerInfo) []WorkerInfo {
 	log.Printf("[Master]: Getting %d workers, avoid list len: %d", number, len(avoidList))
-	for avoid := range avoidList {
-		log.Printf("[Master]: Avoiding %s", avoidList[avoid].WorkerAddress)
-	}
 
+	// Allocate the array
 	var cheapestWorkerInfo = make([]WorkerInfo, number)
 	for i := 0; i < number; i++ {
 		cheapestWorkerInfo[i] = WorkerInfo{
@@ -157,7 +161,7 @@ func GetWorkers(number int, avoidList []WorkerInfo) []WorkerInfo {
 		WorkerInfoMapLock.RLock()
 		availableWorkers := len(WorkerInfoMap)
 		for _, info := range WorkerInfoMap {
-			log.Printf("[Master]: Worker %s cost: %.2f, skipAvoidList: %t, checkIn: %t", info.WorkerAddress, info.Cost, skipAvoidList, checkIn(info, avoidList))
+			log.Printf("[Master]: Check worker %s: cost: %.2f, skipAvoidList: %t, checkIn: %t", info.WorkerAddress, info.Cost, skipAvoidList, checkIn(info, avoidList))
 			for i := found; i < number; i++ {
 				if info.Cost <= cheapestWorkerInfo[i].Cost && (skipAvoidList || !checkIn(info, avoidList)) {
 					log.Printf("[Master]: Worker %s chosen for place %d", info.WorkerAddress, i)
@@ -191,7 +195,7 @@ func GetWorkers(number int, avoidList []WorkerInfo) []WorkerInfo {
 	for i := 0; i < number; i++ {
 		log.Printf("[Master]: Cost of worker[%d] %s: %.2f", i, cheapestWorkerInfo[i].WorkerAddress, cheapestWorkerInfo[i].Cost)
 		winfo := cheapestWorkerInfo[i]
-		winfo.Cost = float32(winfo.QueueSize+1) * (winfo.UsageCPU * 1.5)
+		winfo.Cost = winfo.Cost * 1.5
 		WorkerInfoMap[cheapestWorkerInfo[i].WorkerAddress] = winfo
 		cheapestWorkerInfo[i] = winfo
 	}
@@ -209,11 +213,10 @@ func monitorWorker() {
 
 	go func() {
 		for {
-			// #TODO: set these as env variables
-			time.Sleep(time.Second * 3)
+			time.Sleep(PingTimeout)
 			WorkerInfoMapLock.RLock()
 			for workerAddr, info := range WorkerInfoMap {
-				if time.Since(info.LastPing) > time.Second*3 {
+				if time.Since(info.LastPing) > PingTimeout {
 					WorkerInfoMapLock.RUnlock()
 					RemoveWorker(workerAddr, "ping timeout")
 					WorkerInfoMapLock.RLock()
