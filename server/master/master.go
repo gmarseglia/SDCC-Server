@@ -126,8 +126,9 @@ func RemoveWorker(targetWorkerAddr string, cause string) {
 
 func GetWorkersLen() int {
 	WorkerInfoMapLock.RLock()
-	defer WorkerInfoMapLock.RUnlock()
-	return len(WorkerInfoMap)
+	result := len(WorkerInfoMap)
+	WorkerInfoMapLock.RUnlock()
+	return result
 }
 
 func checkIn(target WorkerInfo, avoidList []WorkerInfo) bool {
